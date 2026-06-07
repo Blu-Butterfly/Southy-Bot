@@ -1,0 +1,29 @@
+[
+  {
+    "id": "stu-001",
+    "role": "student",
+    "username": "student",
+    "email": "student@southwesternuniversity.edu.ng",
+    "displayName": "Demo Student",
+    "salt": "southybot-student-2026",
+    "passwordHash": "295e4ee4af1f5040a89a9e5c1c91880919c265142773ce98e557c4ac3fa01693"
+  },
+  {
+    "id": "app-001",
+    "role": "applicant",
+    "username": "applicant",
+    "email": "applicant@southwesternuniversity.edu.ng",
+    "displayName": "Demo Applicant",
+    "salt": "southybot-applicant-2026",
+    "passwordHash": "bb95b8030a917bf63a367e66d19e28bd83230a07ffe1a36cd92f557392a7ada6"
+  },
+  {
+    "id": "stf-001",
+    "role": "staff",
+    "username": "staff",
+    "email": "staff@southwesternuniversity.edu.ng",
+    "displayName": "Demo Staff",
+    "salt": "southybot-staff-2026",
+    "passwordHash": "1fd272447b910b2a4ce3e46f855a57e573b7e4efab86fa41b629039a2027d6c2"
+  }
+]
