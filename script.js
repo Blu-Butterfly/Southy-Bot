@@ -461,13 +461,7 @@ function renderSuggestions() {
 
 async function loadKnowledgeBase() {
   try {
-    const response = await fetch(`/api/knowledge-base?ts=${Date.now()}`);
-
-    if (!response.ok) {
-      throw new Error("Could not connect to SouthyBot");
-    }
-
-    const payload = await response.json();
+    const payload = await fetchKnowledgePayload();
 
     if (!payload.ok || !Array.isArray(payload.records)) {
       throw new Error(payload.error || "SouthyBot returned an invalid response");
@@ -487,6 +481,33 @@ async function loadKnowledgeBase() {
       botContext.innerHTML = `<strong>Connection pending</strong>${escapeHtml(error.message)}`;
     }
   }
+}
+
+async function fetchKnowledgePayload() {
+  const apiResponse = await fetch(`/api/knowledge-base?ts=${Date.now()}`);
+
+  if (apiResponse.ok) {
+    return apiResponse.json();
+  }
+
+  const staticResponse = await fetch(`./knowledge-base.json?ts=${Date.now()}`);
+
+  if (!staticResponse.ok) {
+    throw new Error("Could not connect to SouthyBot");
+  }
+
+  const staticPayload = await staticResponse.json();
+
+  if (Array.isArray(staticPayload)) {
+    return {
+      ok: true,
+      source: "static-json",
+      recordCount: staticPayload.length,
+      records: staticPayload,
+    };
+  }
+
+  return staticPayload;
 }
 
 const botPanel = document.querySelector(".bot-panel");
