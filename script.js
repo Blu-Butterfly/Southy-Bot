@@ -5,6 +5,8 @@ const SOUTHYBOT_SYSTEM_PROMPT = [
   "SouthyBot is an intelligent, friendly, and highly helpful educational chatbot for Southwestern University students, lecturers, and visitors.",
   "Provide clear, accurate, concise academic and institutional support.",
   "Use a bright, friendly, professional, warm, encouraging, and solution-oriented tone.",
+  "Use a ChatGPT-like conversational style: warm, patient, organized, and helpful.",
+  "Structure responses with short paragraphs, clear labels, and bullet points when helpful.",
   "Answer only with verified retrieved information when university-specific details are needed.",
   "Never fabricate policies, dates, fees, requirements, or university-specific details.",
   "If verified information is unavailable, use the configured uncertainty response.",
@@ -337,14 +339,185 @@ function buildBotAnswer(results) {
   return formatVerifiedAnswer(rowsWithContent);
 }
 
-function formatVerifiedAnswer(rows) {
-  const answers = uniqueValues(rows.map((row) => row.content));
+function cleanAnswerText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
 
-  if (answers.length === 1) {
-    return answers[0];
+function protectAbbreviations(value) {
+  return String(value)
+    .replace(/https?:\/\/[^\s]+/gi, (url) => url.replace(/\./g, "__DOT__"))
+    .replace(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi, (email) => email.replace(/\./g, "__DOT__"))
+    .replace(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/gi, (domain) => domain.replace(/\./g, "__DOT__"))
+    .replace(/Ph\.D\./g, "Ph_D_")
+    .replace(/Ph\.D/g, "Ph_D")
+    .replace(/M\.Sc\./g, "M_Sc_")
+    .replace(/M\.Sc/g, "M_Sc")
+    .replace(/B\.Sc\./g, "B_Sc_")
+    .replace(/B\.Sc/g, "B_Sc")
+    .replace(/P\.M\.B\./g, "P_M_B_");
+}
+
+function restoreAbbreviations(value) {
+  return String(value)
+    .replace(/__DOT__/g, ".")
+    .replace(/Ph_D_/g, "Ph.D.")
+    .replace(/Ph_D/g, "Ph.D")
+    .replace(/M_Sc_/g, "M.Sc.")
+    .replace(/M_Sc/g, "M.Sc")
+    .replace(/B_Sc_/g, "B.Sc.")
+    .replace(/B_Sc/g, "B.Sc")
+    .replace(/P_M_B_/g, "P.M.B.");
+}
+
+function splitLongSentence(sentence) {
+  if (sentence.length <= 420 || !sentence.includes(";")) {
+    return [sentence];
   }
 
-  return `Here's a quick breakdown:\n${answers.map((answer) => `- ${answer}`).join("\n")}`;
+  const clauses = sentence.split(/;\s+/).map((clause) => clause.trim()).filter(Boolean);
+  const chunks = [];
+  let currentChunk = "";
+
+  clauses.forEach((clause) => {
+    const nextChunk = currentChunk ? `${currentChunk}; ${clause}` : clause;
+
+    if (nextChunk.length > 320 && currentChunk) {
+      chunks.push(currentChunk);
+      currentChunk = clause;
+      return;
+    }
+
+    currentChunk = nextChunk;
+  });
+
+  if (currentChunk) {
+    chunks.push(currentChunk);
+  }
+
+  return chunks;
+}
+
+function paragraphizeAnswer(value) {
+  const cleanText = cleanAnswerText(value);
+
+  if (!cleanText) {
+    return "";
+  }
+
+  const sectionedText = cleanText
+    .replace(/\s+(Course Contents|Admission requirements|Graduation requirements|Minimum duration|Direct Entry|PROBATION|Withdrawal)\b/g, "\n\n$1")
+    .replace(/\s+(Applicants should|Applicants are directed|Direct Entry candidates|Candidates with HND|PGD applicants|MBA applicants|M\.Sc applicants|Ph\.D applicants|Verification of credentials)\b/g, "\n\n$1")
+    .replace(/\s+((?:100|200|300|400)\s+LEVEL-[^\s]+ SEMESTER)\b/g, "\n\n$1");
+
+  const paragraphs = [];
+
+  sectionedText
+    .split(/\n{2,}/)
+    .map((section) => section.trim())
+    .filter(Boolean)
+    .forEach((section) => {
+      const protectedSection = protectAbbreviations(section);
+      const sentences = protectedSection.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [protectedSection];
+      let currentParagraph = "";
+
+      sentences.map(restoreAbbreviations).forEach((sentence) => {
+        const trimmedSentence = sentence.trim();
+
+        if (!trimmedSentence) {
+          return;
+        }
+
+        if (trimmedSentence.length > 420) {
+          if (currentParagraph) {
+            paragraphs.push(currentParagraph);
+            currentParagraph = "";
+          }
+
+          splitLongSentence(trimmedSentence).forEach((chunk) => paragraphs.push(chunk));
+          return;
+        }
+
+        const nextParagraph = currentParagraph ? `${currentParagraph} ${trimmedSentence}` : trimmedSentence;
+
+        if (nextParagraph.length > 360 && currentParagraph) {
+          paragraphs.push(currentParagraph);
+          currentParagraph = trimmedSentence;
+          return;
+        }
+
+        currentParagraph = nextParagraph;
+      });
+
+      if (currentParagraph) {
+        paragraphs.push(currentParagraph);
+      }
+    });
+
+  return paragraphs.join("\n\n");
+}
+
+function getFriendlyIntro(rows) {
+  const category = normalizeText(rows[0]?.category || "");
+
+  if (rows.length > 1) {
+    return "Absolutely. Here's a clear breakdown from Southwestern University's verified information:";
+  }
+
+  if (category.includes("admission")) {
+    return "Sure. Here's the verified admission information:";
+  }
+
+  if (category.includes("tuition") || category.includes("fees")) {
+    return "Sure. Here's the verified fee information:";
+  }
+
+  if (category.includes("course") || category.includes("computer science")) {
+    return "Sure. Here's the course information I found:";
+  }
+
+  if (category.includes("contact")) {
+    return "Sure. Here's the verified contact information:";
+  }
+
+  return "Sure. Here's what I found from Southwestern University's verified information:";
+}
+
+function formatAnswerSection(row, includeTitle) {
+  const title = String(row.title || row.category || "").trim();
+  const body = paragraphizeAnswer(row.content);
+
+  if (!body) {
+    return "";
+  }
+
+  if (!includeTitle || !title) {
+    return body;
+  }
+
+  return `${title}:\n${body}`;
+}
+
+function formatVerifiedAnswer(rows) {
+  const seenAnswers = new Set();
+  const uniqueRows = rows.filter((row) => {
+    const answer = cleanAnswerText(row.content).toLowerCase();
+
+    if (!answer || seenAnswers.has(answer)) {
+      return false;
+    }
+
+    seenAnswers.add(answer);
+    return true;
+  });
+
+  if (uniqueRows.length === 1) {
+    return `${getFriendlyIntro(uniqueRows)}\n\n${formatAnswerSection(uniqueRows[0], false)}`;
+  }
+
+  return `${getFriendlyIntro(uniqueRows)}\n\n${uniqueRows
+    .map((row) => formatAnswerSection(row, true))
+    .filter(Boolean)
+    .join("\n\n")}`;
 }
 
 function renderRetrievedContext(results) {

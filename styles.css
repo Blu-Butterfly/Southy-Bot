@@ -1,6 +1,8 @@
 :root {
   --blue-900: #0b5fff;
   --blue-700: #006fe6;
+  --green-900: #0b5fff;
+  --green-700: #006fe6;
   --gold-500: #38bdf8;
   --gold-100: #eaf4ff;
   --blue-700: #0b5fff;
@@ -598,7 +600,7 @@ td:last-child {
 
 .chat-message p {
   margin: 0;
-  white-space: pre-line;
+  white-space: pre-wrap;
 }
 
 .chat-message.assistant {
