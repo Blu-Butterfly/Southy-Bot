@@ -1,4 +1,15 @@
 const RESPONSE_DELAY_MS = 3000;
+const SOUTHYBOT_UNVERIFIED_RESPONSE =
+  "I don\u2019t have enough verified information on that, but I can help you with related details.";
+const SOUTHYBOT_SYSTEM_PROMPT = [
+  "SouthyBot is an intelligent, friendly, and highly helpful educational chatbot for Southwestern University students, lecturers, and visitors.",
+  "Provide clear, accurate, concise academic and institutional support.",
+  "Use a bright, friendly, professional, warm, encouraging, and solution-oriented tone.",
+  "Answer only with verified retrieved information when university-specific details are needed.",
+  "Never fabricate policies, dates, fees, requirements, or university-specific details.",
+  "If verified information is unavailable, use the configured uncertainty response.",
+  "Keep responses clean, direct, student-friendly, and educational.",
+].join(" ");
 let knowledgeBase = [];
 let botBusy = false;
 let lastCategory = "";
@@ -311,7 +322,7 @@ function searchKnowledgeBase(question) {
 
 function buildBotAnswer(results) {
   if (!results.length) {
-    return "I'm sorry, could you rephrase your question?";
+    return SOUTHYBOT_UNVERIFIED_RESPONSE;
   }
 
   const rowsWithContent = results
@@ -319,11 +330,21 @@ function buildBotAnswer(results) {
     .filter((row) => String(row.content || "").trim());
 
   if (!rowsWithContent.length) {
-    return "I found a possible match, but I can't give a clear answer right now. Please send an email to info@southwesternuniversity.edu.ng and the team will get back to you shortly.";
+    return SOUTHYBOT_UNVERIFIED_RESPONSE;
   }
 
   lastCategory = rowsWithContent[0].category;
-  return uniqueValues(rowsWithContent.map((row) => row.content)).join("\n");
+  return formatVerifiedAnswer(rowsWithContent);
+}
+
+function formatVerifiedAnswer(rows) {
+  const answers = uniqueValues(rows.map((row) => row.content));
+
+  if (answers.length === 1) {
+    return answers[0];
+  }
+
+  return `Here's a quick breakdown:\n${answers.map((answer) => `- ${answer}`).join("\n")}`;
 }
 
 function renderRetrievedContext(results) {
@@ -488,6 +509,7 @@ if (botForm && botQuestionInput) {
 
 window.SouthyBot = {
   ask: askSouthyBot,
+  getPrompt: () => SOUTHYBOT_SYSTEM_PROMPT,
   reloadKnowledgeBase: loadKnowledgeBase,
   search: searchKnowledgeBase,
   getRecords: () => [...knowledgeBase],
@@ -604,7 +626,7 @@ if (loginForm && loginMessage) {
     } catch (error) {
       const message =
         error.name === "AbortError"
-          ? "Login is taking too long. Please check that the backend server is running."
+          ? "Login is taking too long. Please refresh and try again."
           : error.message || "Login failed.";
       setLoginMessage(message, "error");
     } finally {
